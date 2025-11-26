@@ -12,6 +12,46 @@ const FrequencyTable: React.FC<FrequencyTableProps> = ({ data }) => {
 
   if (data.length === 0) return null;
 
+  // Universal copy function with fallback for non-HTTPS environments
+  const copyToClipboard = async (text: string): Promise<boolean> => {
+    // Try modern Clipboard API first (requires HTTPS)
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        console.warn('Clipboard API failed, trying fallback:', err);
+        // Fall through to fallback method
+      }
+    }
+
+    // Fallback: Use execCommand (works in non-HTTPS environments)
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      
+      if (successful) {
+        return true;
+      } else {
+        throw new Error('execCommand copy failed');
+      }
+    } catch (err) {
+      console.error('All copy methods failed:', err);
+      // Last resort: show text in alert for user to manually copy
+      alert('无法自动复制，请手动复制以下内容：\n\n' + text.substring(0, 500) + (text.length > 500 ? '...' : ''));
+      return false;
+    }
+  };
+
   const handleCopyFull = async () => {
     // Format: Rank\tWord\tCount (tab-separated for easy pasting into Excel/Google Sheets)
     const textToCopy = data.map((item, index) => 
@@ -22,12 +62,10 @@ const FrequencyTable: React.FC<FrequencyTableProps> = ({ data }) => {
     const header = 'Rank\tWord\tCount\n';
     const fullText = header + textToCopy;
 
-    try {
-      await navigator.clipboard.writeText(fullText);
+    const success = await copyToClipboard(fullText);
+    if (success) {
       setCopiedFull(true);
       setTimeout(() => setCopiedFull(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
     }
   };
 
@@ -35,12 +73,10 @@ const FrequencyTable: React.FC<FrequencyTableProps> = ({ data }) => {
     // Format: Only words, one per line
     const wordsOnly = data.map(item => item.word).join('\n');
 
-    try {
-      await navigator.clipboard.writeText(wordsOnly);
+    const success = await copyToClipboard(wordsOnly);
+    if (success) {
       setCopiedWords(true);
       setTimeout(() => setCopiedWords(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
     }
   };
 
