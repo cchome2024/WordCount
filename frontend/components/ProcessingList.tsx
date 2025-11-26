@@ -27,10 +27,12 @@ const ProcessingList: React.FC<ProcessingListProps> = ({ files }) => {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-700 truncate">{file.fileName}</p>
               {file.status === 'error' && (
-                <p className="text-xs text-red-500 truncate">{file.errorMessage || 'Error processing file'}</p>
+                <p className="text-xs text-red-500 mt-1 break-words" title={file.errorMessage}>
+                  {file.errorMessage || '文件处理失败'}
+                </p>
               )}
               {file.status === 'processing' && (
-                <p className="text-xs text-slate-400">Extracting text...</p>
+                <p className="text-xs text-slate-400 mt-1">正在提取文本...</p>
               )}
             </div>
           </div>

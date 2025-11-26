@@ -2,17 +2,17 @@ import React, { useState, useCallback } from 'react';
 import { BookOpen, RefreshCw, Filter } from 'lucide-react';
 import DropZone from './components/DropZone';
 import ProcessingList from './components/ProcessingList';
-import FrequencyChart from './components/FrequencyChart';
 import FrequencyTable from './components/FrequencyTable';
 import { parseDocx, parsePdf } from './services/fileParser';
 import { processText } from './services/textProcessor';
-import { FileProcessingStatus, WordFrequency } from './types';
+import { FileProcessingStatus, TextProcessingResult } from './types';
 
 const App: React.FC = () => {
   const [fileStatuses, setFileStatuses] = useState<FileProcessingStatus[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [aggregatedText, setAggregatedText] = useState('');
-  const [results, setResults] = useState<WordFrequency[]>([]);
+  const [results, setResults] = useState<TextProcessingResult>({ allowedWords: [], otherWords: [] });
+  const [minWordLength, setMinWordLength] = useState<number>(0); // 最小单词长度过滤，0表示不过滤
 
   const handleFilesSelected = useCallback(async (files: File[]) => {
     setIsProcessing(true);
@@ -49,8 +49,9 @@ const App: React.FC = () => {
         ));
       } catch (error) {
         console.error(`Error parsing ${file.name}:`, error);
+        const errorMessage = error instanceof Error ? error.message : '文件解析失败';
         setFileStatuses(prev => prev.map(s => 
-          s.fileName === file.name ? { ...s, status: 'error', errorMessage: 'Failed to parse file' } : s
+          s.fileName === file.name ? { ...s, status: 'error', errorMessage } : s
         ));
       }
     }
@@ -59,8 +60,8 @@ const App: React.FC = () => {
     setAggregatedText(prev => {
       const combinedText = prev + ' ' + newTextContent;
       // Calculate frequencies on the fly
-      const freqs = processText(combinedText);
-      setResults(freqs);
+      const processingResult = processText(combinedText);
+      setResults(processingResult);
       return combinedText;
     });
 
@@ -70,7 +71,7 @@ const App: React.FC = () => {
   const handleReset = () => {
     setFileStatuses([]);
     setAggregatedText('');
-    setResults([]);
+    setResults({ allowedWords: [], otherWords: [] });
     setIsProcessing(false);
   };
 
@@ -87,7 +88,7 @@ const App: React.FC = () => {
               LexiCount Pro
             </h1>
           </div>
-          {results.length > 0 && (
+          {(results.allowedWords.length > 0 || results.otherWords.length > 0) && (
             <button
               onClick={handleReset}
               className="flex items-center space-x-2 text-sm font-medium text-slate-600 hover:text-indigo-600 transition-colors bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg"
@@ -122,33 +123,91 @@ const App: React.FC = () => {
         </section>
 
         {/* Results Section */}
-        {results.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Chart Column */}
-            <div className="flex flex-col">
-              <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
-                <span className="w-1 h-6 bg-indigo-500 rounded mr-3"></span>
-                Top 20 Visual Analysis
-              </h3>
-              <FrequencyChart data={results} />
-              
-              <div className="mt-6 bg-indigo-50 p-6 rounded-xl border border-indigo-100">
-                <h4 className="font-semibold text-indigo-900 mb-2">Analysis Summary</h4>
-                <p className="text-indigo-800/80 text-sm">
-                  Found <strong>{results.length}</strong> unique meaningful words across <strong>{fileStatuses.filter(f => f.status === 'completed').length}</strong> file(s). 
-                  The top word is "<strong>{results[0]?.word}</strong>" appearing {results[0]?.count} times.
-                </p>
+        {(results.allowedWords.length > 0 || results.otherWords.length > 0) && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Allowed Words Section */}
+            {results.allowedWords.length > 0 && (
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                <div className="mb-6 flex items-center justify-between">
+                  <h3 className="text-2xl font-bold text-slate-800 flex items-center">
+                    <span className="w-1 h-8 bg-indigo-500 rounded mr-3"></span>
+                    单词表中的单词统计
+                  </h3>
+                  <div className="bg-indigo-50 px-4 py-2 rounded-lg border border-indigo-100">
+                    <p className="text-sm text-indigo-800">
+                      找到 <strong>{results.allowedWords.length}</strong> 个单词，共 <strong>{fileStatuses.filter(f => f.status === 'completed').length}</strong> 个文件。 
+                      最高频词: "<strong>{results.allowedWords[0]?.word}</strong>" ({results.allowedWords[0]?.count} 次)
+                    </p>
+                  </div>
+                </div>
+                <FrequencyTable data={results.allowedWords} />
               </div>
-            </div>
+            )}
 
-            {/* Table Column */}
-            <div className="flex flex-col">
-              <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center">
-                <span className="w-1 h-6 bg-violet-500 rounded mr-3"></span>
-                Top 200 Words
-              </h3>
-              <FrequencyTable data={results} />
-            </div>
+            {/* Other Words Section */}
+            {results.otherWords.length > 0 && (() => {
+              // Filter other words by minimum length
+              const filteredOtherWords = minWordLength > 0
+                ? results.otherWords.filter(word => word.word.length >= minWordLength)
+                : results.otherWords;
+
+              return (
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-2xl font-bold text-slate-800 flex items-center">
+                        <span className="w-1 h-8 bg-violet-500 rounded mr-3"></span>
+                        其他单词统计（排除日常用词）
+                      </h3>
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2 text-sm text-slate-600">
+                          <span>最小长度:</span>
+                          <select
+                            value={minWordLength}
+                            onChange={(e) => setMinWordLength(Number(e.target.value))}
+                            className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg bg-white hover:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-colors"
+                          >
+                            <option value={0}>不过滤</option>
+                            <option value={3}>3个字母及以上</option>
+                            <option value={4}>4个字母及以上</option>
+                            <option value={5}>5个字母及以上</option>
+                            <option value={6}>6个字母及以上</option>
+                            <option value={7}>7个字母及以上</option>
+                            <option value={8}>8个字母及以上</option>
+                            <option value={9}>9个字母及以上</option>
+                            <option value={10}>10个字母及以上</option>
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                    <div className="bg-violet-50 px-4 py-2 rounded-lg border border-violet-100">
+                      <p className="text-sm text-violet-800">
+                        {minWordLength > 0 ? (
+                          <>
+                            找到 <strong>{filteredOtherWords.length}</strong> 个单词（已过滤{minWordLength}个字母以下的单词），共 <strong>{fileStatuses.filter(f => f.status === 'completed').length}</strong> 个文件。
+                            {filteredOtherWords.length > 0 && (
+                              <> 最高频词: "<strong>{filteredOtherWords[0]?.word}</strong>" ({filteredOtherWords[0]?.count} 次)</>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            找到 <strong>{filteredOtherWords.length}</strong> 个单词，共 <strong>{fileStatuses.filter(f => f.status === 'completed').length}</strong> 个文件。 
+                            最高频词: "<strong>{filteredOtherWords[0]?.word}</strong>" ({filteredOtherWords[0]?.count} 次)
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  {filteredOtherWords.length > 0 ? (
+                    <FrequencyTable data={filteredOtherWords} />
+                  ) : (
+                    <div className="text-center py-12 text-slate-400">
+                      <p>没有符合条件的单词（所有单词都少于 {minWordLength} 个字母）</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </main>
