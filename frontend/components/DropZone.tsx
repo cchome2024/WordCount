@@ -82,10 +82,13 @@ const DropZone: React.FC<DropZoneProps> = ({ onFilesSelected, isProcessing }) =>
         </div>
         <div className="space-y-1">
           <p className="text-lg font-medium text-slate-700">
-            {isDragOver ? 'Drop files now' : 'Click or drag files here'}
+            {isDragOver ? 'Drop files now' : '点击选择文件'}
           </p>
           <p className="text-sm text-slate-500">
-            Support for .docx (Word) and .pdf files
+            支持 .docx (Word) 和 .pdf 文件
+          </p>
+          <p className="text-xs text-slate-400 mt-2">
+            📱 手机用户：点击后可从"文件"app或iCloud选择
           </p>
         </div>
       </div>
